@@ -1,0 +1,116 @@
+#!/bin/bash
+
+# Tool Name: endodork
+# Author: Inayat Hussain (Security Researcher)
+# Purpose: Automate Google Dorks for recon & bug bounty hunting
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# Get target and optional flag
+TARGET="$1"
+OPEN_ALL=false
+
+usage() {
+  echo -e "${YELLOW}Usage:${NC} ./endodork.sh <domain> [--open-all]"
+  echo -e "Example: ./endodork.sh kayak.com --open-all"
+  exit 1
+}
+
+if [[ -z "$TARGET" ]]; then
+  read -p "Enter target domain (e.g. kayak.com): " TARGET
+  if [[ -z "$TARGET" ]]; then
+    usage
+  fi
+fi
+
+if [[ "$2" == "--open-all" ]]; then
+  OPEN_ALL=true
+fi
+
+LOGFILE="dorks_${TARGET}_$(date +%F_%T).log"
+
+declare -a dorks=(
+  "site:$TARGET intitle:\"index of\""
+  "site:$TARGET ext:log | ext:bak | ext:old | ext:backup"
+  "site:$TARGET ext:sql | ext:db | ext:ini | ext:env"
+  "site:$TARGET \"phpinfo()\" OR \"X-Powered-By: PHP\""
+  "site:$TARGET inurl:config OR inurl:wp-config"
+  "site:$TARGET inurl:env OR ext:env"
+  "site:$TARGET inurl:?q="
+  "site:$TARGET inurl:?search="
+  "site:$TARGET inurl:?s="
+  "site:$TARGET inurl:?redirect="
+  "site:$TARGET inurl:?url="
+  "site:$TARGET inurl:?id="
+  "site:$TARGET inurl:?cat="
+  "site:$TARGET inurl:?pid="
+  "site:$TARGET inurl:?item="
+  "site:$TARGET inurl:?product="
+  "site:$TARGET inurl:?page="
+  "site:$TARGET inurl:?file="
+  "site:$TARGET inurl:?path="
+  "site:$TARGET inurl:?include="
+  "site:$TARGET intitle:\"login\""
+  "site:$TARGET inurl:/admin"
+  "site:$TARGET inurl:/dashboard"
+  "site:$TARGET inurl:/secure"
+  "site:$TARGET inurl:/api/"
+  "site:$TARGET inurl:/graphql"
+  "site:$TARGET ext:json"
+  "site:$TARGET ext:json intext:password"
+  "site:$TARGET ext:txt intext:apikey"
+  "site:$TARGET ext:log intext:error"
+  "site:dev.$TARGET"
+  "site:test.$TARGET"
+  "site:stage.$TARGET"
+  "site:old.$TARGET"
+  "site:$TARGET ext:js"
+)
+
+# Cross-platform open URL function
+open_url() {
+  local url="$1"
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url" >/dev/null 2>&1 &
+  elif command -v gnome-open >/dev/null 2>&1; then
+    gnome-open "$url" >/dev/null 2>&1 &
+  elif command -v open >/dev/null 2>&1; then
+    open "$url" >/dev/null 2>&1 &
+  else
+    echo -e "${RED}[!] Could not detect a way to open URLs on your OS${NC}"
+    echo "URL: $url"
+  fi
+}
+
+echo -e "${GREEN}=============================="
+echo -e "       endodork v1.1"
+echo -e "  by Inayat Hussain (Security Researcher)"
+echo -e "==============================${NC}"
+echo -e "[+] Target Domain : ${YELLOW}$TARGET${NC}"
+echo -e "[+] Dork Count     : ${#dorks[@]}"
+echo -e "[+] Log File       : ${YELLOW}$LOGFILE${NC}"
+echo -e "[+] Auto-open all  : ${YELLOW}$OPEN_ALL${NC}"
+echo ""
+
+for dork in "${dorks[@]}"; do
+  url="https://www.google.com/search?q=$(echo "$dork" | sed 's/ /+/g')"
+  echo "[*] $dork"
+  echo "$url" >> "$LOGFILE"
+
+  if [ "$OPEN_ALL" = true ]; then
+    open_url "$url"
+  else
+    # Ask user for each dork if they want to open
+    read -p "    > Open this in browser? (y/n): " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+      open_url "$url"
+    fi
+  fi
+done
+
+echo ""
+echo -e "${GREEN}[✔] Done.${NC} All Google dork links saved to ${YELLOW}$LOGFILE${NC}"
+
